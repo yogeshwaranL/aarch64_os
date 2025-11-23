@@ -112,28 +112,85 @@ void pmm_mark_region(uint64_t base, uint64_t size, uint32_t flags)
  */
 struct page *alloc_pages(int order)
 {
-    struct page *page;
+    struct page *page, *p;
+    uint64_t i, count;
 
-    if (order > MAX_ORDER || order != 0) {
-        /* For Phase 5, only support order-0 allocations */
+    if (order > MAX_ORDER) {
         return NULL;
     }
 
-    /* Get page from free list */
-    page = main_zone.free_lists[order];
-    if (!page) {
-        return NULL;
+    /* For order-0, use the free list directly */
+    if (order == 0) {
+        page = main_zone.free_lists[0];
+        if (!page) {
+            return NULL;
+        }
+
+        /* Remove from free list */
+        main_zone.free_lists[0] = page->next;
+        page->next = NULL;
+        page->flags = PAGE_USED;
+        page->order = 0;
+        page->refcount = 1;
+        main_zone.free_pages--;
+
+        return page;
     }
 
-    /* Remove from free list */
-    main_zone.free_lists[order] = page->next;
-    page->next = NULL;
-    page->flags = PAGE_USED;
-    page->order = order;
-    page->refcount = 1;
-    main_zone.free_pages--;
+    /* For higher orders, allocate contiguous order-0 pages */
+    count = 1UL << order;  /* 2^order pages */
 
-    return page;
+    /* Find contiguous free pages */
+    for (i = 0; i <= num_pages - count; i++) {
+        /* Check if we have 'count' contiguous free pages starting at i */
+        uint64_t j;
+        int all_free = 1;
+
+        for (j = 0; j < count; j++) {
+            if (pages[i + j].flags != PAGE_FREE) {
+                all_free = 0;
+                break;
+            }
+        }
+
+        if (all_free) {
+            /* Found contiguous block - allocate all pages */
+            for (j = 0; j < count; j++) {
+                p = &pages[i + j];
+
+                /* Remove from free list */
+                if (j == 0) {
+                    /* First page tracks the whole allocation */
+                    struct page **prev_ptr = &main_zone.free_lists[0];
+                    while (*prev_ptr && *prev_ptr != p) {
+                        prev_ptr = &(*prev_ptr)->next;
+                    }
+                    if (*prev_ptr) {
+                        *prev_ptr = p->next;
+                    }
+                } else {
+                    /* Remove subsequent pages from free list */
+                    struct page **prev_ptr = &main_zone.free_lists[0];
+                    while (*prev_ptr && *prev_ptr != p) {
+                        prev_ptr = &(*prev_ptr)->next;
+                    }
+                    if (*prev_ptr) {
+                        *prev_ptr = p->next;
+                    }
+                }
+
+                p->next = NULL;
+                p->flags = PAGE_USED;
+                p->order = (j == 0) ? order : 0;  /* Only first page tracks order */
+                p->refcount = 1;
+                main_zone.free_pages--;
+            }
+
+            return &pages[i];  /* Return first page */
+        }
+    }
+
+    return NULL;  /* No contiguous block found */
 }
 
 /*
@@ -141,6 +198,9 @@ struct page *alloc_pages(int order)
  */
 void free_pages(struct page *page, int order)
 {
+    uint64_t i, count;
+    struct page *p;
+
     if (!page || order > MAX_ORDER) {
         return;
     }
@@ -151,12 +211,19 @@ void free_pages(struct page *page, int order)
     }
 
     if (page->refcount == 0) {
-        /* Add back to free list */
-        page->flags = PAGE_FREE;
-        page->order = order;
-        page->next = main_zone.free_lists[order];
-        main_zone.free_lists[order] = page;
-        main_zone.free_pages++;
+        count = 1UL << order;  /* 2^order pages */
+
+        /* Free all pages in the allocation */
+        for (i = 0; i < count; i++) {
+            p = page + i;
+
+            /* Add back to order-0 free list */
+            p->flags = PAGE_FREE;
+            p->order = 0;
+            p->next = main_zone.free_lists[0];
+            main_zone.free_lists[0] = p;
+            main_zone.free_pages++;
+        }
     }
 }
 
