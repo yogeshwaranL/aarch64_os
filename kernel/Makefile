@@ -45,19 +45,19 @@ endif
 # Linker flags
 LDFLAGS := -nostdlib -T $(ARCH_DIR)/linker.ld -Map=$(KERNEL_MAP)
 
-# Source files (to be populated in Phase 4)
-ARCH_SOURCES :=
-CORE_SOURCES :=
+# Source files (Phase 4)
+ARCH_SOURCES := $(ARCH_DIR)/entry.S
+CORE_SOURCES := $(CORE_DIR)/main.c $(CORE_DIR)/string.c
 MM_SOURCES :=
 SCHED_SOURCES :=
-DRIVER_SOURCES :=
+DRIVER_SOURCES := $(DRIVERS_DIR)/uart.c
 
 # Object files
-ARCH_OBJS := $(patsubst %.S,$(BUILD_DIR)/%.o,$(patsubst %.c,$(BUILD_DIR)/%.o,$(ARCH_SOURCES)))
-CORE_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(CORE_SOURCES))
-MM_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(MM_SOURCES))
-SCHED_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SCHED_SOURCES))
-DRIVER_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(DRIVER_SOURCES))
+ARCH_OBJS := $(patsubst $(ARCH_DIR)/%.S,$(BUILD_DIR)/arch/%.o,$(ARCH_SOURCES))
+CORE_OBJS := $(patsubst $(CORE_DIR)/%.c,$(BUILD_DIR)/core/%.o,$(CORE_SOURCES))
+MM_OBJS := $(patsubst $(MM_DIR)/%.c,$(BUILD_DIR)/mm/%.o,$(MM_SOURCES))
+SCHED_OBJS := $(patsubst $(SCHED_DIR)/%.c,$(BUILD_DIR)/sched/%.o,$(SCHED_SOURCES))
+DRIVER_OBJS := $(patsubst $(DRIVERS_DIR)/%.c,$(BUILD_DIR)/drivers/%.o,$(DRIVER_SOURCES))
 
 ALL_OBJS := $(ARCH_OBJS) $(CORE_OBJS) $(MM_OBJS) $(SCHED_OBJS) $(DRIVER_OBJS)
 
@@ -75,29 +75,46 @@ $(BUILD_DIR):
 # Link kernel
 $(KERNEL_ELF): $(ALL_OBJS)
 	@echo "Linking kernel..."
-	@echo "Note: Kernel implementation starts in Phase 4"
-	@echo "Creating placeholder kernel..."
-	@mkdir -p $(BUILD_DIR)
-	@touch $(KERNEL_ELF)
+	$(LD) $(LDFLAGS) $(ALL_OBJS) -o $@
+	@echo "Kernel linked: $@"
+	@ls -lh $@
 
 # Create binary
 $(KERNEL_BIN): $(KERNEL_ELF)
 	@echo "Creating kernel binary..."
-	@touch $(KERNEL_BIN)
+	$(OBJCOPY) -O binary $< $@
+	@ls -lh $@
 
 # Create disassembly listing
 $(KERNEL_LST): $(KERNEL_ELF)
 	$(OBJDUMP) -D $(KERNEL_ELF) > $(KERNEL_LST)
 
 # Compile C sources
-$(BUILD_DIR)/%.o: %.c
+$(BUILD_DIR)/core/%.o: $(CORE_DIR)/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+	@echo "CC $<"
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/drivers/%.o: $(DRIVERS_DIR)/%.c
+	@mkdir -p $(dir $@)
+	@echo "CC $<"
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/mm/%.o: $(MM_DIR)/%.c
+	@mkdir -p $(dir $@)
+	@echo "CC $<"
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/sched/%.o: $(SCHED_DIR)/%.c
+	@mkdir -p $(dir $@)
+	@echo "CC $<"
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 # Compile assembly sources
-$(BUILD_DIR)/%.o: %.S
+$(BUILD_DIR)/arch/%.o: $(ARCH_DIR)/%.S
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
+	@echo "AS $<"
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 # Clean
 clean:
