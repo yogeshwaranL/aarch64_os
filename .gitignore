@@ -1,0 +1,118 @@
+# Build directories
+build/
+*.o
+*.a
+*.so
+*.elf
+*.bin
+*.img
+*.map
+*.lst
+*.d
+
+# Kernel build artifacts
+kernel/arch/aarch64/*.o
+kernel/core/*.o
+kernel/mm/*.o
+kernel/sched/*.o
+kernel/drivers/*.o
+
+# Hypervisor build artifacts
+hypervisor/core/*.o
+hypervisor/vm/*.o
+hypervisor/vcpu/*.o
+
+# ACPI build artifacts
+acpi/interpreter/*.o
+acpi/tables/*.o
+
+# ATF build (submodule - only ignore build output)
+firmware/atf/build/
+
+# EDK2 build (submodule - only ignore build output)
+firmware/edk2/Build/
+firmware/edk2/Conf/.cache
+firmware/edk2/Conf/build_rule.txt
+firmware/edk2/Conf/target.txt
+firmware/edk2/Conf/tools_def.txt
+
+# Documentation generated files
+docs/api/html/
+docs/api/latex/
+docs/api/xml/
+*.aux
+*.log
+*.pdf
+*.toc
+*.out
+
+# Editor and IDE files
+*.swp
+*.swo
+*~
+.*.sw?
+.vscode/
+.idea/
+*.sublime-*
+.DS_Store
+._*
+
+# Compiled Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# GDB
+.gdb_history
+gdb.txt
+
+# QEMU
+qemu.log
+qemu-*.log
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+.#*
+
+# Tags
+tags
+TAGS
+.tags
+.TAGS
+cscope.*
+compile_commands.json
+
+# Core dumps
+core
+core.*
+vgcore.*
+
+# Logs
+*.log
+log/
+
+# macOS
+.AppleDouble
+.LSOverride
+Icon
+.Spotlight-V100
+.Trashes
+
+# Linux
+.directory
+.Trash-*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Test artifacts
+test/output/
+*.test
+*.out
