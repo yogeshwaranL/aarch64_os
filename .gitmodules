@@ -1,0 +1,8 @@
+[submodule "firmware/atf"]
+	path = firmware/atf
+	url = https://github.com/ARM-software/arm-trusted-firmware.git
+	branch = master
+[submodule "firmware/edk2"]
+	path = firmware/edk2
+	url = https://github.com/tianocore/edk2.git
+	branch = master

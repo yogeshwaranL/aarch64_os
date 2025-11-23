@@ -145,10 +145,17 @@ atf: $(BUILD_DIR)
 		echo "Error: ATF directory not found. Run 'make init-submodules'"; \
 		exit 1; \
 	fi
-	@echo "ATF will be built in Phase 2"
-	@echo "Placeholder: ATF build"
+	@$(MAKE) -C $(ATF_DIR) \
+		PLAT=qemu \
+		ARCH=aarch64 \
+		CROSS_COMPILE=$(CROSS_COMPILE) \
+		DEBUG=1 \
+		bl1 bl2 bl31
 	@mkdir -p $(FW_BUILD_DIR)
-	@touch $(FW_BUILD_DIR)/atf-placeholder.txt
+	@cp $(ATF_DIR)/build/qemu/debug/bl1.bin $(FW_BUILD_DIR)/
+	@cp $(ATF_DIR)/build/qemu/debug/bl2.bin $(FW_BUILD_DIR)/
+	@cp $(ATF_DIR)/build/qemu/debug/bl31.bin $(FW_BUILD_DIR)/
+	@echo "ATF binaries copied to $(FW_BUILD_DIR)"
 
 # UEFI EDK2
 edk2: $(BUILD_DIR)
