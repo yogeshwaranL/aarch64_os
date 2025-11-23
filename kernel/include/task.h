@@ -27,6 +27,12 @@ typedef enum {
 /* Task ID type */
 typedef uint32_t task_id_t;
 
+/* Task execution level */
+typedef enum {
+    TASK_KERNEL = 0,                            /* Kernel task (EL1) */
+    TASK_USER                                   /* User task (EL0) */
+} task_level_t;
+
 /* Task Control Block */
 struct task {
     /* Task identification */
@@ -41,9 +47,17 @@ struct task {
     /* Context (saved registers) */
     struct exception_frame context;
 
-    /* Stack */
-    void *stack_base;                           /* Bottom of stack */
-    void *stack_top;                            /* Top of stack (initial SP) */
+    /* Stack - kernel and user */
+    void *kernel_stack_base;                    /* Bottom of kernel stack */
+    void *kernel_stack_top;                     /* Top of kernel stack */
+    void *user_stack_base;                      /* Bottom of user stack (if user task) */
+    void *user_stack_top;                       /* Top of user stack (if user task) */
+
+    /* Memory management (for user tasks) */
+    void *page_table;                           /* User page table (NULL for kernel tasks) */
+
+    /* Execution level */
+    task_level_t level;                         /* EL0 (user) or EL1 (kernel) */
 
     /* Statistics */
     uint64_t run_count;                         /* Number of times scheduled */

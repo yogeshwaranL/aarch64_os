@@ -16,6 +16,7 @@
 /* Scheduler functions */
 void sched_init(void);
 task_id_t task_create(const char *name, task_func_t func, void *arg, uint32_t priority);
+task_id_t task_create_user(const char *name, uint64_t entry_point, uint32_t priority);
 void task_exit(void);
 void task_yield(void);
 void task_sleep(uint32_t ms);

@@ -26,6 +26,12 @@
 #define VA_L3_SHIFT         12                          /* Level 3: bits [20:12] */
 #define VA_OFFSET_MASK      0xFFF                       /* Offset: bits [11:0] */
 
+/* User/Kernel address space split (39-bit VA for better separation) */
+#define USER_VA_BITS        39                          /* 512GB user space */
+#define KERNEL_VA_BITS      39                          /* 512GB kernel space */
+#define USER_VA_SIZE        (1UL << USER_VA_BITS)       /* 512GB */
+#define KERNEL_VA_BASE      0xFFFFFF8000000000UL        /* Kernel space starts here */
+
 /* Extract page table indices from virtual address */
 #define VA_L0_INDEX(va)     (((va) >> VA_L0_SHIFT) & 0x1FF)
 #define VA_L1_INDEX(va)     (((va) >> VA_L1_SHIFT) & 0x1FF)
@@ -64,7 +70,7 @@
 #define PTE_AP_RO_EL1       (2UL << 6)                  /* RO, EL1 only */
 #define PTE_AP_RO_ALL       (3UL << 6)                  /* RO, all ELs */
 
-/* Common page attributes */
+/* Common page attributes - Kernel */
 #define PAGE_KERNEL_RO      (PTE_VALID | PTE_AF | PTE_ATTRINDX(PTE_ATTR_NORMAL) | \
                              PTE_SH_INNER | PTE_AP_RO_EL1 | PTE_PXN | PTE_UXN)
 
@@ -79,6 +85,16 @@
 
 #define PAGE_DEVICE         (PTE_VALID | PTE_AF | PTE_ATTRINDX(PTE_ATTR_DEVICE) | \
                              PTE_AP_RW_EL1 | PTE_PXN | PTE_UXN)
+
+/* Common page attributes - User */
+#define PAGE_USER_RO        (PTE_VALID | PTE_AF | PTE_ATTRINDX(PTE_ATTR_NORMAL) | \
+                             PTE_SH_INNER | PTE_AP_RO_ALL | PTE_PXN | PTE_UXN | PTE_NG)
+
+#define PAGE_USER_RW        (PTE_VALID | PTE_AF | PTE_ATTRINDX(PTE_ATTR_NORMAL) | \
+                             PTE_SH_INNER | PTE_AP_RW_ALL | PTE_PXN | PTE_UXN | PTE_NG)
+
+#define PAGE_USER_RX        (PTE_VALID | PTE_AF | PTE_ATTRINDX(PTE_ATTR_NORMAL) | \
+                             PTE_SH_INNER | PTE_AP_RO_ALL | PTE_PXN | PTE_NG)
 
 /* Page table structure */
 typedef struct {
@@ -128,9 +144,18 @@ void mmu_init(void);
 void mmu_enable(void);
 page_table_t *mmu_get_kernel_pgd(void);
 
+/* Kernel mapping functions */
 void map_page(uint64_t virt, uint64_t phys, uint64_t flags);
 void map_range(uint64_t virt, uint64_t phys, size_t size, uint64_t flags);
 void unmap_page(uint64_t virt);
+
+/* User page table management */
+page_table_t *mmu_create_user_table(void);
+void mmu_destroy_user_table(page_table_t *user_pgd);
+void mmu_map_user_page(page_table_t *user_pgd, uint64_t virt, uint64_t phys, uint64_t flags);
+void mmu_map_user_range(page_table_t *user_pgd, uint64_t virt, uint64_t phys, size_t size, uint64_t flags);
+void mmu_switch_user_table(page_table_t *user_pgd);
+uint64_t mmu_get_physical(page_table_t *pgd, uint64_t virt);
 
 /* Utility functions */
 static inline uint64_t page_align_down(uint64_t addr)

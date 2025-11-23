@@ -46,7 +46,12 @@ void sched_init(void)
     for (i = 0; i < MAX_TASKS; i++) {
         task_pool[i].state = TASK_TERMINATED;
         task_pool[i].id = 0;
-        task_pool[i].stack_base = NULL;
+        task_pool[i].kernel_stack_base = NULL;
+        task_pool[i].kernel_stack_top = NULL;
+        task_pool[i].user_stack_base = NULL;
+        task_pool[i].user_stack_top = NULL;
+        task_pool[i].page_table = NULL;
+        task_pool[i].level = TASK_KERNEL;
     }
 
     /* Create idle task (always runs when no other task is ready) */
@@ -98,13 +103,13 @@ task_id_t task_create(const char *name, task_func_t func, void *arg, uint32_t pr
         return 0;
     }
 
-    /* Allocate stack (single page = 4KB) */
+    /* Allocate kernel stack (single page = 4KB) */
     struct page *stack_page = alloc_pages(0);
     if (!stack_page) {
         uart_puts("ERROR: Failed to allocate task stack\n");
         return 0;
     }
-    task->stack_base = (void *)page_to_phys(stack_page);
+    task->kernel_stack_base = (void *)page_to_phys(stack_page);
 
     /* Initialize task */
     task->id = next_task_id++;
@@ -117,12 +122,16 @@ task_id_t task_create(const char *name, task_func_t func, void *arg, uint32_t pr
     task->time_slice = DEFAULT_TIME_SLICE;
     task->run_count = 0;
     task->total_runtime = 0;
+    task->level = TASK_KERNEL;                         /* Kernel task by default */
+    task->page_table = NULL;                           /* No user page table */
+    task->user_stack_base = NULL;
+    task->user_stack_top = NULL;
 
     /* Initialize context */
     memset(&task->context, 0, sizeof(struct exception_frame));
 
     /* Set up initial stack frame */
-    stack_ptr = (uint64_t *)((uint8_t *)task->stack_base + TASK_STACK_SIZE);
+    stack_ptr = (uint64_t *)((uint8_t *)task->kernel_stack_base + TASK_STACK_SIZE);
     stack_ptr = (uint64_t *)((uint64_t)stack_ptr & ~0xFUL);  /* 16-byte align */
 
     /* Set initial register values */
@@ -131,7 +140,7 @@ task_id_t task_create(const char *name, task_func_t func, void *arg, uint32_t pr
     task->context.spsr = 0x3C5;                        /* EL1h, IRQs enabled */
     task->context.x0 = (uint64_t)arg;                  /* Argument */
 
-    task->stack_top = (void *)stack_ptr;
+    task->kernel_stack_top = (void *)stack_ptr;
 
     /* Set state and add to ready queue */
     task->state = TASK_READY;
@@ -292,12 +301,21 @@ void task_exit(void)
     /* Mark as terminated */
     current_task->state = TASK_TERMINATED;
 
-    /* Free stack */
-    if (current_task->stack_base) {
-        struct page *stack_page = phys_to_page((uint64_t)current_task->stack_base);
+    /* Free kernel stack */
+    if (current_task->kernel_stack_base) {
+        struct page *stack_page = phys_to_page((uint64_t)current_task->kernel_stack_base);
         free_pages(stack_page, 0);
-        current_task->stack_base = NULL;
+        current_task->kernel_stack_base = NULL;
     }
+
+    /* Free user stack if it exists */
+    if (current_task->user_stack_base) {
+        struct page *stack_page = phys_to_page((uint64_t)current_task->user_stack_base);
+        free_pages(stack_page, 0);
+        current_task->user_stack_base = NULL;
+    }
+
+    /* TODO: Free user page table if it exists */
 
     /* Force immediate reschedule */
     current_task->time_slice = 0;
