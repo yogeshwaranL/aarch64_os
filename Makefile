@@ -7,18 +7,12 @@ VERSION := 0.1.0
 
 # Directories
 BUILD_DIR := build
-FIRMWARE_DIR := firmware
 KERNEL_DIR := kernel
-HYPERVISOR_DIR := hypervisor
-ACPI_DIR := acpi
 DOCS_DIR := docs
 SCRIPTS_DIR := scripts
 
 # Output directories
-FW_BUILD_DIR := $(BUILD_DIR)/firmware
 KERNEL_BUILD_DIR := $(BUILD_DIR)/kernel
-HYPERVISOR_BUILD_DIR := $(BUILD_DIR)/hypervisor
-ACPI_BUILD_DIR := $(BUILD_DIR)/acpi
 
 # Toolchain
 CROSS_COMPILE ?= aarch64-linux-gnu-
@@ -49,36 +43,19 @@ RELEASE_FLAGS := -O2 -DNDEBUG
 # Default to debug build
 CFLAGS ?= $(COMMON_CFLAGS) $(DEBUG_FLAGS)
 
-# Firmware paths (ATF and EDK2)
-ATF_DIR := $(FIRMWARE_DIR)/atf
-ATF_BUILD := $(ATF_DIR)/build/qemu/release
-EDK2_DIR := $(FIRMWARE_DIR)/edk2
-EDK2_BUILD := $(EDK2_DIR)/Build
-
 # Output binaries
-BL1_BIN := $(FW_BUILD_DIR)/bl1.bin
-BL2_BIN := $(FW_BUILD_DIR)/bl2.bin
-BL31_BIN := $(FW_BUILD_DIR)/bl31.bin
-BL33_BIN := $(FW_BUILD_DIR)/bl33.bin
 KERNEL_ELF := $(KERNEL_BUILD_DIR)/kernel.elf
 KERNEL_BIN := $(KERNEL_BUILD_DIR)/kernel.bin
-HYPERVISOR_ELF := $(HYPERVISOR_BUILD_DIR)/hypervisor.elf
-HYPERVISOR_BIN := $(HYPERVISOR_BUILD_DIR)/hypervisor.bin
-
-# Flash image
-FLASH_IMG := $(BUILD_DIR)/flash.img
 
 # Phony targets
 .PHONY: all clean distclean help \
-        firmware atf edk2 \
-        kernel hypervisor acpi \
+        kernel \
         run run-debug \
-        docs docs-html docs-pdf \
-        init-submodules \
-        check-tools
+        docs docs-html \
+        check-tools info
 
 # Default target
-all: check-tools firmware kernel hypervisor
+all: check-tools kernel
 	@echo "======================================"
 	@echo "Build complete: $(PROJECT_NAME) v$(VERSION)"
 	@echo "======================================"
@@ -88,21 +65,16 @@ help:
 	@echo "AArch64 Bare Metal OS - Build System"
 	@echo ""
 	@echo "Targets:"
-	@echo "  all              - Build everything (firmware, kernel, hypervisor)"
-	@echo "  firmware         - Build all firmware (ATF + EDK2)"
-	@echo "  atf              - Build ARM Trusted Firmware"
-	@echo "  edk2             - Build UEFI EDK2"
+	@echo "  all              - Build kernel"
 	@echo "  kernel           - Build OS kernel"
-	@echo "  hypervisor       - Build hypervisor"
-	@echo "  acpi             - Build ACPI components"
 	@echo "  run              - Run in QEMU"
 	@echo "  run-debug        - Run in QEMU with GDB stub"
-	@echo "  docs             - Generate all documentation"
+	@echo "  docs             - Generate documentation"
 	@echo "  docs-html        - Generate HTML documentation (Doxygen)"
 	@echo "  clean            - Clean build artifacts"
-	@echo "  distclean        - Clean everything including firmware"
-	@echo "  init-submodules  - Initialize git submodules (ATF, EDK2)"
+	@echo "  distclean        - Deep clean all build files"
 	@echo "  check-tools      - Check required tools are installed"
+	@echo "  info             - Display build configuration"
 	@echo ""
 	@echo "Variables:"
 	@echo "  CROSS_COMPILE    - Toolchain prefix (default: aarch64-linux-gnu-)"
@@ -122,69 +94,9 @@ check-tools:
 		(echo "Error: git not found." && exit 1)
 	@echo "All required tools found."
 
-# Initialize git submodules
-init-submodules:
-	@echo "Initializing git submodules..."
-	git submodule update --init --recursive
-
 # Create build directories
 $(BUILD_DIR):
-	mkdir -p $(FW_BUILD_DIR) $(KERNEL_BUILD_DIR) $(HYPERVISOR_BUILD_DIR) $(ACPI_BUILD_DIR)
-
-# ==================== FIRMWARE ====================
-
-firmware: atf edk2
-	@echo "Firmware build complete"
-
-# ARM Trusted Firmware
-atf: $(BUILD_DIR)
-	@echo "======================================"
-	@echo "Building ARM Trusted Firmware (ATF)..."
-	@echo "======================================"
-	@if [ ! -d "$(ATF_DIR)" ]; then \
-		echo "Error: ATF directory not found. Run 'make init-submodules'"; \
-		exit 1; \
-	fi
-	@$(MAKE) -C $(ATF_DIR) \
-		PLAT=qemu \
-		ARCH=aarch64 \
-		CROSS_COMPILE=$(CROSS_COMPILE) \
-		DEBUG=1 \
-		bl1 bl2 bl31
-	@mkdir -p $(FW_BUILD_DIR)
-	@cp $(ATF_DIR)/build/qemu/debug/bl1.bin $(FW_BUILD_DIR)/
-	@cp $(ATF_DIR)/build/qemu/debug/bl2.bin $(FW_BUILD_DIR)/
-	@cp $(ATF_DIR)/build/qemu/debug/bl31.bin $(FW_BUILD_DIR)/
-	@echo "ATF binaries copied to $(FW_BUILD_DIR)"
-
-# UEFI EDK2
-edk2: $(BUILD_DIR)
-	@echo "======================================"
-	@echo "Building UEFI EDK2..."
-	@echo "======================================"
-	@if [ ! -d "$(EDK2_DIR)" ]; then \
-		echo "Error: EDK2 directory not found. Run 'make init-submodules'"; \
-		exit 1; \
-	fi
-	@echo "Building EDK2 BaseTools..."
-	@$(MAKE) -C $(EDK2_DIR)/BaseTools
-	@echo "Building UEFI firmware for QEMU AArch64..."
-	@cd $(EDK2_DIR) && \
-		export GCC5_AARCH64_PREFIX=$(CROSS_COMPILE) && \
-		export WORKSPACE=$(EDK2_DIR) && \
-		export PACKAGES_PATH=$(EDK2_DIR) && \
-		. edksetup.sh && \
-		build -a AARCH64 -t GCC5 -p ArmVirtPkg/ArmVirtQemu.dsc -b DEBUG
-	@mkdir -p $(FW_BUILD_DIR)
-	@cp $(EDK2_DIR)/Build/ArmVirtQemu-AArch64/DEBUG_GCC5/FV/QEMU_EFI.fd $(FW_BUILD_DIR)/
-	@cp $(EDK2_DIR)/Build/ArmVirtQemu-AArch64/DEBUG_GCC5/FV/QEMU_VARS.fd $(FW_BUILD_DIR)/
-	@echo "Padding firmware files to 64MB for QEMU..."
-	@dd if=/dev/zero of=$(FW_BUILD_DIR)/QEMU_EFI_PADDED.fd bs=1M count=64 2>/dev/null
-	@dd if=$(FW_BUILD_DIR)/QEMU_EFI.fd of=$(FW_BUILD_DIR)/QEMU_EFI_PADDED.fd conv=notrunc 2>/dev/null
-	@dd if=/dev/zero of=$(FW_BUILD_DIR)/QEMU_VARS_PADDED.fd bs=1M count=64 2>/dev/null
-	@dd if=$(FW_BUILD_DIR)/QEMU_VARS.fd of=$(FW_BUILD_DIR)/QEMU_VARS_PADDED.fd conv=notrunc 2>/dev/null
-	@echo "UEFI firmware copied and padded to $(FW_BUILD_DIR)"
-	@ls -lh $(FW_BUILD_DIR)/QEMU_*PADDED.fd
+	mkdir -p $(KERNEL_BUILD_DIR)
 
 # ==================== KERNEL ====================
 
@@ -195,28 +107,10 @@ kernel: $(BUILD_DIR)
 	@$(MAKE) -C $(KERNEL_DIR) BUILD_DIR=../$(KERNEL_BUILD_DIR)
 	@echo "Kernel build complete"
 
-# ==================== HYPERVISOR ====================
-
-hypervisor: $(BUILD_DIR)
-	@echo "======================================"
-	@echo "Building Hypervisor..."
-	@echo "======================================"
-	@$(MAKE) -C $(HYPERVISOR_DIR) BUILD_DIR=../$(HYPERVISOR_BUILD_DIR)
-	@echo "Hypervisor build complete"
-
-# ==================== ACPI ====================
-
-acpi: $(BUILD_DIR)
-	@echo "======================================"
-	@echo "Building ACPI Components..."
-	@echo "======================================"
-	@$(MAKE) -C $(ACPI_DIR) BUILD_DIR=../$(ACPI_BUILD_DIR)
-	@echo "ACPI build complete"
-
 # ==================== QEMU ====================
 
 # Run in QEMU
-run: all
+run: kernel
 	@echo "======================================"
 	@echo "Starting QEMU..."
 	@echo "======================================"
@@ -230,7 +124,7 @@ run: all
 		-kernel $(KERNEL_ELF)
 
 # Run in QEMU with GDB debugging
-run-debug: all
+run-debug: kernel
 	@echo "======================================"
 	@echo "Starting QEMU with GDB stub (port 1234)..."
 	@echo "Connect with: gdb-multiarch $(KERNEL_ELF) -ex 'target remote :1234'"
@@ -255,12 +149,8 @@ docs-html:
 	@if [ -f "Doxyfile" ]; then \
 		doxygen Doxyfile; \
 	else \
-		echo "Doxyfile not found. Will be created in Phase 1."; \
+		echo "Doxyfile not found."; \
 	fi
-
-docs-pdf:
-	@echo "Generating PDF documentation..."
-	@cd $(DOCS_DIR) && $(MAKE) pdf
 
 # ==================== CLEAN ====================
 
@@ -268,14 +158,10 @@ clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR)
 	@if [ -d "$(KERNEL_DIR)" ]; then $(MAKE) -C $(KERNEL_DIR) clean; fi
-	@if [ -d "$(HYPERVISOR_DIR)" ]; then $(MAKE) -C $(HYPERVISOR_DIR) clean; fi
-	@if [ -d "$(ACPI_DIR)" ]; then $(MAKE) -C $(ACPI_DIR) clean; fi
 	@echo "Clean complete"
 
 distclean: clean
 	@echo "Performing deep clean..."
-	@if [ -d "$(ATF_DIR)" ]; then $(MAKE) -C $(ATF_DIR) distclean 2>/dev/null || true; fi
-	@if [ -d "$(EDK2_DIR)" ]; then rm -rf $(EDK2_BUILD) 2>/dev/null || true; fi
 	rm -rf $(BUILD_DIR)
 	find . -name "*.o" -delete
 	find . -name "*.d" -delete
@@ -302,7 +188,5 @@ info:
 	@echo ""
 	@echo "Build directories:"
 	@echo "  Build:    $(BUILD_DIR)"
-	@echo "  Firmware: $(FW_BUILD_DIR)"
 	@echo "  Kernel:   $(KERNEL_BUILD_DIR)"
-	@echo "  HV:       $(HYPERVISOR_BUILD_DIR)"
 	@echo "======================================"

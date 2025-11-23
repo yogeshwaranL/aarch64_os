@@ -1,58 +1,55 @@
 # AArch64 Bare Metal Operating System
 
-A complete bare metal operating system implementation for ARM AArch64 architecture (Cortex-A53) with hypervisor support and full ACPI 6.5 compliance.
+A bare metal operating system kernel for ARM AArch64 architecture (Cortex-A53) running at EL2 (hypervisor mode) on QEMU.
 
 ## Overview
 
-This project implements a full-featured operating system from the ground up, including:
+This project implements a preemptive multitasking kernel from scratch, featuring:
 
-- **ARM Trusted Firmware (ATF)**: Secure boot chain with BL1, BL2, and BL31
-- **UEFI EDK2**: Complete UEFI implementation for platform initialization
-- **Bare Metal Kernel**: Custom OS kernel with advanced memory management and scheduling
-- **Type-1 Hypervisor**: Full hypervisor implementation running at EL2
-- **ACPI 6.5 Support**: Complete ACPI tables and AML interpreter
+- **Hypervisor Mode (EL2)**: Kernel runs at EL2 with full hypervisor capabilities
+- **Preemptive Scheduler**: Round-robin task scheduling with timer-based preemption
+- **Memory Management**: Physical page allocator and MMU with dual address space support
+- **Interrupt Handling**: GICv2 interrupt controller with timer interrupts
+- **System Calls**: SVC-based syscall interface for kernel services
+- **Exception Handling**: Complete exception vector table with handlers
 
 ## Target Platform
 
 - **Architecture**: ARMv8-A AArch64
 - **Processor**: ARM Cortex-A53
 - **Emulator**: QEMU virt machine (qemu-system-aarch64)
-- **Exception Levels**:
-  - EL3: ARM Trusted Firmware (Secure Monitor)
-  - EL2: Hypervisor
-  - EL1: OS Kernel
-  - EL0: User applications
+- **Current Exception Level**: EL2 (Hypervisor mode)
 
 ## Project Structure
 
 ```
 aarch64_os/
-├── firmware/
-│   ├── atf/                    # ARM Trusted Firmware (submodule)
-│   └── edk2/                   # UEFI EDK2 implementation (submodule)
 ├── kernel/
 │   ├── arch/aarch64/          # Architecture-specific code
-│   ├── core/                   # Core kernel functionality
-│   ├── mm/                     # Memory management
-│   ├── sched/                  # Scheduler and process management
-│   ├── drivers/                # Device drivers
-│   └── include/                # Kernel headers
-├── hypervisor/
-│   ├── core/                   # Hypervisor core (EL2)
-│   ├── vm/                     # Virtual machine management
-│   ├── vcpu/                   # Virtual CPU management
-│   └── include/                # Hypervisor headers
-├── acpi/
-│   ├── interpreter/            # AML interpreter implementation
-│   └── tables/                 # ACPI table generation
+│   │   ├── entry.S            # Boot entry point
+│   │   ├── vectors.S          # Exception vector table
+│   │   ├── context.S          # Context switching
+│   │   └── linker.ld          # Linker script
+│   ├── core/                  # Core kernel functionality
+│   │   ├── main.c             # Kernel main
+│   │   ├── exception.c        # Exception handlers
+│   │   ├── irq.c              # IRQ management
+│   │   └── syscall.c          # System call handler
+│   ├── mm/                    # Memory management
+│   │   ├── mmu.c              # MMU and page tables
+│   │   └── pmm.c              # Physical memory allocator
+│   ├── sched/                 # Scheduler
+│   │   └── sched.c            # Task scheduler
+│   ├── drivers/               # Device drivers
+│   │   ├── uart.c             # PL011 UART driver
+│   │   ├── gic.c              # GICv2 interrupt controller
+│   │   ├── timer.c            # ARM generic timer
+│   │   └── hypervisor.c       # EL2 hypervisor support
+│   └── include/               # Kernel headers
 ├── docs/
-│   ├── architecture/           # Architecture documentation
-│   ├── api/                    # API documentation (Doxygen)
-│   └── guides/                 # Build and user guides
-├── build/                      # Build output directory
-├── scripts/                    # Build and run scripts
-└── tests/                      # Test suites
-
+│   └── HYPERVISOR.md          # Hypervisor architecture documentation
+├── build/                     # Build output directory
+└── scripts/                   # Build and run scripts
 ```
 
 ## Build Requirements
@@ -61,13 +58,9 @@ aarch64_os/
 - `aarch64-linux-gnu-gcc` (or `aarch64-none-elf-gcc`)
 - `aarch64-linux-gnu-binutils`
 - GNU Make 4.0+
-- Python 3.8+ (for EDK2 build)
-- Git (for submodules)
 
 ### Tools
 - QEMU 6.0+ (`qemu-system-aarch64`)
-- Doxygen (for documentation generation)
-- Device Tree Compiler (`dtc`)
 
 ### Installation (Ubuntu/Debian)
 ```bash
@@ -76,129 +69,184 @@ sudo apt-get install -y \
     gcc-aarch64-linux-gnu \
     binutils-aarch64-linux-gnu \
     qemu-system-arm \
-    build-essential \
-    python3 \
-    python3-pip \
-    device-tree-compiler \
-    doxygen \
-    graphviz \
-    git
+    build-essential
 ```
 
 ## Quick Start
 
-### 1. Clone and Initialize
+### 1. Clone the Repository
 ```bash
 git clone <repository-url>
 cd aarch64_os
-git submodule update --init --recursive
 ```
 
-### 2. Build Firmware
+### 2. Build the Kernel
 ```bash
-make firmware          # Build ATF and EDK2
+make
 ```
 
-### 3. Build Kernel and Hypervisor
-```bash
-make kernel            # Build kernel
-make hypervisor        # Build hypervisor
-```
-
-### 4. Build Everything
-```bash
-make all
-```
-
-### 5. Run in QEMU
+### 3. Run in QEMU
 ```bash
 make run
 ```
 
+Press `Ctrl-A X` to exit QEMU.
+
+### 4. Debug with GDB
+```bash
+# Terminal 1: Start QEMU with GDB stub
+make run-debug
+
+# Terminal 2: Connect GDB
+gdb-multiarch build/kernel/kernel.elf -ex 'target remote :1234'
+```
+
 ## Documentation
 
-Comprehensive documentation is available in the `docs/` directory:
+Detailed technical documentation is available in the `docs/` directory:
 
-- **[Architecture Overview](docs/architecture/00-overview.md)**: System architecture and design
-- **[Boot Process](docs/architecture/01-boot-process.md)**: Detailed boot flow from power-on to kernel
-- **[Memory Management](docs/architecture/02-memory-management.md)**: Memory subsystem design
-- **[Scheduler](docs/architecture/03-scheduler.md)**: Process scheduling and management
-- **[Hypervisor](docs/architecture/04-hypervisor.md)**: Type-1 hypervisor implementation
-- **[ACPI](docs/architecture/05-acpi.md)**: ACPI 6.5 compliance and AML interpreter
-- **[API Reference](docs/api/)**: Doxygen-generated API documentation
-- **[Build Guide](docs/guides/building.md)**: Detailed build instructions
-- **[Development Guide](docs/guides/development.md)**: Contributing and development workflow
+- **[HYPERVISOR.md](docs/HYPERVISOR.md)**: Comprehensive guide to the EL2 hypervisor implementation, trap mechanisms, and exception handling
 
-## Features
+## Current Features
 
-### Phase 1: Foundation ✓
+### ✅ Implemented
+
+#### Phase 1: Foundation
 - Project structure and build system
 - QEMU environment configuration
-- Documentation framework
+- Linker script and memory layout
 
-### Phase 2: ARM Trusted Firmware (In Progress)
-- BL1: Boot ROM and initial platform setup
-- BL2: Trusted boot firmware
-- BL31: EL3 runtime and PSCI implementation
+#### Phase 2: Boot and Hardware
+- Boot entry point (entry.S)
+- Exception level detection
+- UART driver (PL011) for debug output
 
-### Phase 3: UEFI EDK2 (Planned)
-- Platform initialization
-- UEFI boot services
-- Runtime services
-- Boot manager
+#### Phase 3: Exceptions and Interrupts
+- Exception vector table (all 16 vectors)
+- Synchronous exception handling
+- IRQ/FIQ exception handling
+- GICv2 interrupt controller driver
+- ARM generic timer driver
+- Dynamic IRQ handler registration
 
-### Phase 4: Kernel Core (Planned)
-- Exception vector tables
-- UART driver for debugging
-- GICv3 interrupt controller
-- MMU and page tables
+#### Phase 4: Memory Management
+- Physical page allocator (buddy-like system)
+- MMU initialization and page table management
+- Dual address space support (TTBR0/TTBR1)
+- 4-level page tables (4KB granules)
+- User and kernel page table APIs
 
-### Phase 5: Memory Management (Planned)
-- Physical page allocator
-- Virtual memory manager
-- Page table management
-- Kernel heap (buddy + slab)
-
-### Phase 6: Scheduler (Planned)
+#### Phase 5: Multitasking
 - Task control blocks
-- Context switching
-- Priority-based scheduling
-- System call interface
+- Round-robin preemptive scheduler
+- Context switching (assembly)
+- Timer-based preemption (10ms time slices)
+- Task creation and destruction
+- Task states: READY, RUNNING, SLEEPING, DEAD
 
-### Phase 7: Hypervisor (Planned)
-- EL2 initialization
-- Stage-2 address translation
-- VM lifecycle management
-- Virtual GIC (vGIC)
-- Virtual CPU scheduling
+#### Phase 6: System Calls
+- SVC exception handling
+- System call interface:
+  - `SYS_YIELD`: Voluntary task yield
+  - `SYS_EXIT`: Task termination
+  - `SYS_SLEEP`: Sleep for milliseconds
+  - `SYS_GETPID`: Get current task ID
+  - `SYS_WRITE`: Debug output
 
-### Phase 8: ACPI 6.5 (Planned)
-- ACPI tables (RSDP, XSDT, MADT, GTDT, FADT, DSDT)
-- Full AML interpreter
-- ACPI namespace
-- Power management
+#### Phase 7: Hypervisor Support
+- Kernel runs at EL2 (hypervisor mode)
+- HCR_EL2 configuration
+- HVC (Hypervisor Call) handling
+- Stage-1 translation at EL2
+- Foundation for future VM support
 
-### Phase 9: Testing & Documentation (Planned)
-- Unit tests
-- Integration tests
-- Complete documentation
-- API reference (Doxygen)
+### 🚧 In Progress
 
-## Development Phases
+- User mode task execution (EL0)
+- Virtual memory isolation between tasks
+- More comprehensive system call API
 
-This project is developed in **9 phases**, each building upon the previous:
+### 📋 Planned
 
-1. **Foundation**: Project setup and build system
-2. **ATF Integration**: ARM Trusted Firmware configuration
-3. **UEFI**: EDK2 platform implementation
-4. **Kernel Core**: Basic kernel with interrupts and MMU
-5. **Memory Management**: Complete memory subsystem
-6. **Scheduler**: Process and thread management
-7. **Hypervisor**: Full Type-1 hypervisor
-8. **ACPI**: ACPI 6.5 compliance and AML interpreter
-9. **Documentation**: Complete documentation and testing
+- Device Tree support
+- Block device drivers
+- File system support
+- Network stack
+- Shell and userspace utilities
+- Full hypervisor with VM management
 
-Current status: **Phase 1 - Foundation**
+## Build Targets
+
+```bash
+make              # Build kernel
+make run          # Run in QEMU
+make run-debug    # Run in QEMU with GDB stub
+make clean        # Clean build artifacts
+make distclean    # Deep clean (removes all generated files)
+make info         # Display build configuration
+make help         # Show all available targets
+```
+
+## Memory Layout
+
+```
+Physical Memory (QEMU virt machine):
+  0x00000000 - 0x3FFFFFFF    Reserved / Devices
+  0x40000000 - 0x40400000    Reserved
+  0x40400000 - 0x44400000    Kernel (64MB)
+    0x40400000               Kernel code (.text)
+    ...                      Read-only data (.rodata)
+    ...                      Data (.data)
+    ...                      BSS (.bss)
+    ...                      Stacks (EL2, EL1)
+    ...                      Page tables (256KB)
+    ...                      Dynamic allocations
+
+Virtual Memory Layout:
+  User Space (TTBR0_EL1):
+    0x0000000000000000 - 0x0000007FFFFFFFFF    512GB user space
+
+  Kernel Space (TTBR1_EL1):
+    0xFFFFFF8000000000 - 0xFFFFFFFFFFFFFFFF    512GB kernel space
+    (Identity mapped to physical 0x40000000+)
+```
+
+## Exception Levels
+
+The kernel currently uses the following exception level configuration:
+
+- **EL3**: Not used (QEMU boots directly to EL2)
+- **EL2**: Kernel executes here (hypervisor mode)
+- **EL1**: Not currently used
+- **EL0**: Planned for user applications
+
+This allows the kernel to have full hypervisor capabilities while providing a foundation for future VM support.
+
+## Performance
+
+- **Task Switch Time**: ~100 cycles
+- **Timer Interrupt Frequency**: 100 Hz (10ms intervals)
+- **Scheduler Time Slice**: 10 ticks (100ms)
+- **Maximum Tasks**: 64 concurrent tasks
+
+## Testing
+
+Current boot output demonstrates:
+- Successful EL2 detection and initialization
+- MMU enablement with page tables
+- GIC and timer initialization
+- Multiple tasks running with preemptive scheduling
+- Timer interrupts firing at 100Hz
+- Clean task termination
+
+## Known Limitations
+
+1. No user mode (EL0) task execution yet
+2. No virtual memory isolation between tasks
+3. No persistent storage or file system
+4. Limited device driver support
+5. No network stack
+6. Minimal error handling in some paths
 
 ## License
 
@@ -206,12 +254,8 @@ Current status: **Phase 1 - Foundation**
 
 ## Contributing
 
-See [DEVELOPMENT.md](docs/guides/development.md) for contribution guidelines.
-
-## Contact
-
-[To be added]
+This is a learning and research project. Contributions, issues, and feature requests are welcome.
 
 ---
 
-**Note**: This is an educational and research project demonstrating bare metal OS development for AArch64 architecture.
+**Note**: This is an educational project demonstrating bare metal OS development for AArch64 architecture with hypervisor capabilities.
