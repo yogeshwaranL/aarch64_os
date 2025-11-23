@@ -56,10 +56,10 @@ SECTIONS
         __stack_top_el1 = .;
     } > RAM
 
-    /* Kernel page tables (Phase 4: simple identity mapping) */
+    /* Kernel page tables (Phase 5: expanded for 64MB DRAM mapping) */
     .page_tables (NOLOAD) : ALIGN(4096) {
         __page_tables_start = .;
-        . = . + 0x10000;   /* 64KB for page tables */
+        . = . + 0x40000;   /* 256KB for page tables */
         __page_tables_end = .;
     } > RAM
 

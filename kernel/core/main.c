@@ -4,6 +4,10 @@
 
 #include "kernel.h"
 #include "uart.h"
+#include "mmu.h"
+#include "pmm.h"
+#include "kmalloc.h"
+#include "gic.h"
 
 /* Current exception level (set by entry.S) */
 static uint64_t current_el = 0;
@@ -130,7 +134,33 @@ void kernel_main(void *dtb, uint64_t el)
     /* Test basic functions */
     test_basic_functions();
 
+    /* Phase 5: Initialize Memory Management */
+    pmm_init();                                         /* Physical memory manager */
+    mmu_init();                                         /* MMU and page tables */
+    kmalloc_init();                                     /* Kernel heap */
+
+    /* Phase 5: Initialize GIC */
+    gic_init();                                         /* Interrupt controller */
+
+    /* Test memory allocator */
+    uart_puts("Testing memory allocator:\n");
+    void *ptr1 = kmalloc(64);
+    if (ptr1) {
+        uart_puts("  kmalloc(64): ");
+        uart_puthex((uint64_t)ptr1);
+        uart_puts(" - OK\n");
+        kfree(ptr1);
+        uart_puts("  kfree(): OK\n");
+    }
+
+    /* Dump statistics */
+    pmm_dump_stats();
+    kmalloc_dump_stats();
+
+    uart_puts("\n");
+    uart_puts("========================================\n");
     uart_puts("Kernel initialization complete!\n");
+    uart_puts("========================================\n");
     uart_puts("\n");
 
     /* Main kernel loop */
@@ -138,7 +168,7 @@ void kernel_main(void *dtb, uint64_t el)
     uart_puts("(Press any key to see echo, Ctrl-A X to exit QEMU)\n");
     uart_puts("\n");
 
-    /* Simple echo loop for Phase 4 */
+    /* Simple echo loop */
     while (1) {
         char c = uart_getc();
         uart_puts("Received: '");

@@ -67,6 +67,10 @@ el2_entry:
     msr     hcr_el2, x0
     isb
 
+    /* Enable FP/SIMD at EL2 (CPTR_EL2) */
+    msr     cptr_el2, xzr           /* Clear all trap bits */
+    isb
+
     /* Jump to common initialization */
     b       common_init
 
@@ -96,6 +100,12 @@ el1_entry:
     /* Fall through to common_init */
 
 common_init:
+    /* Enable FP/SIMD (prevents traps from compiler-generated SIMD code) */
+    mrs     x0, cpacr_el1
+    orr     x0, x0, #(3 << 20)      /* FPEN bits: no trapping to EL1 */
+    msr     cpacr_el1, x0
+    isb
+
     /* Clear BSS section */
     ldr     x0, =__bss_start
     ldr     x1, =__bss_end
