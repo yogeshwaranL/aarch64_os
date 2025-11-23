@@ -28,6 +28,10 @@ LDFLAGS := -T $(LDSCRIPT) -nostdlib
 
 .PHONY: all clean
 
+# Prevent Make from deleting intermediate files
+.SECONDARY: $(USER_BINS)
+.PRECIOUS: $(BUILD_DIR)/%.s.o $(BUILD_DIR)/%.elf $(BUILD_DIR)/%.bin $(BUILD_DIR)/%.o
+
 all: $(BUILD_DIR) $(USER_BINS) $(USER_OBJS)
 
 $(BUILD_DIR):

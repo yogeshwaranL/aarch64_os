@@ -76,7 +76,7 @@ all: $(BUILD_DIR) user_programs $(KERNEL_ELF) $(KERNEL_BIN)
 # Build user programs
 user_programs:
 	@echo "Building user programs..."
-	@$(MAKE) -C $(USER_DIR) BUILD_DIR=../../$(BUILD_DIR)/user
+	@$(MAKE) -C $(USER_DIR) BUILD_DIR=$(abspath $(BUILD_DIR))/user
 
 # Create build directory
 $(BUILD_DIR):
