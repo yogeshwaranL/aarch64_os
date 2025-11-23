@@ -166,10 +166,25 @@ edk2: $(BUILD_DIR)
 		echo "Error: EDK2 directory not found. Run 'make init-submodules'"; \
 		exit 1; \
 	fi
-	@echo "EDK2 will be built in Phase 3"
-	@echo "Placeholder: EDK2 build"
+	@echo "Building EDK2 BaseTools..."
+	@$(MAKE) -C $(EDK2_DIR)/BaseTools
+	@echo "Building UEFI firmware for QEMU AArch64..."
+	@cd $(EDK2_DIR) && \
+		export GCC5_AARCH64_PREFIX=$(CROSS_COMPILE) && \
+		export WORKSPACE=$(EDK2_DIR) && \
+		export PACKAGES_PATH=$(EDK2_DIR) && \
+		. edksetup.sh && \
+		build -a AARCH64 -t GCC5 -p ArmVirtPkg/ArmVirtQemu.dsc -b DEBUG
 	@mkdir -p $(FW_BUILD_DIR)
-	@touch $(FW_BUILD_DIR)/edk2-placeholder.txt
+	@cp $(EDK2_DIR)/Build/ArmVirtQemu-AArch64/DEBUG_GCC5/FV/QEMU_EFI.fd $(FW_BUILD_DIR)/
+	@cp $(EDK2_DIR)/Build/ArmVirtQemu-AArch64/DEBUG_GCC5/FV/QEMU_VARS.fd $(FW_BUILD_DIR)/
+	@echo "Padding firmware files to 64MB for QEMU..."
+	@dd if=/dev/zero of=$(FW_BUILD_DIR)/QEMU_EFI_PADDED.fd bs=1M count=64 2>/dev/null
+	@dd if=$(FW_BUILD_DIR)/QEMU_EFI.fd of=$(FW_BUILD_DIR)/QEMU_EFI_PADDED.fd conv=notrunc 2>/dev/null
+	@dd if=/dev/zero of=$(FW_BUILD_DIR)/QEMU_VARS_PADDED.fd bs=1M count=64 2>/dev/null
+	@dd if=$(FW_BUILD_DIR)/QEMU_VARS.fd of=$(FW_BUILD_DIR)/QEMU_VARS_PADDED.fd conv=notrunc 2>/dev/null
+	@echo "UEFI firmware copied and padded to $(FW_BUILD_DIR)"
+	@ls -lh $(FW_BUILD_DIR)/QEMU_*PADDED.fd
 
 # ==================== KERNEL ====================
 
