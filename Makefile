@@ -31,7 +31,7 @@ AR := $(CROSS_COMPILE)ar
 
 # QEMU configuration
 QEMU := qemu-system-aarch64
-QEMU_MACHINE := virt
+QEMU_MACHINE := virt,virtualization=on
 QEMU_CPU := cortex-a53
 QEMU_MEMORY := 1G
 QEMU_SMP := 4
