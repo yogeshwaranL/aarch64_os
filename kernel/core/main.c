@@ -11,6 +11,9 @@
 #include "irq.h"
 #include "timer.h"
 #include "exception.h"
+#include "sched.h"
+#include "task.h"
+#include "syscall.h"
 
 /* Current exception level (set by entry.S) */
 static uint64_t current_el = 0;
@@ -105,6 +108,48 @@ static void test_basic_functions(void)
 }
 
 /*
+ * Test task functions for demonstrating preemptive multitasking
+ */
+static void task_a_func(void *arg)
+{
+    int i = 0;
+    (void)arg;
+
+    while (1) {
+        sys_write("[Task A] Running iteration ");
+        uart_puthex(i++);
+        sys_write("\n");
+        sys_sleep(500);  /* Sleep 500ms */
+    }
+}
+
+static void task_b_func(void *arg)
+{
+    int i = 0;
+    (void)arg;
+
+    while (1) {
+        sys_write("[Task B] Running iteration ");
+        uart_puthex(i++);
+        sys_write("\n");
+        sys_sleep(700);  /* Sleep 700ms */
+    }
+}
+
+static void task_c_func(void *arg)
+{
+    int i = 0;
+    (void)arg;
+
+    while (1) {
+        sys_write("[Task C] Running iteration ");
+        uart_puthex(i++);
+        sys_write("\n");
+        sys_sleep(1000);  /* Sleep 1000ms */
+    }
+}
+
+/*
  * Kernel main function
  *
  * Called from entry.S after basic initialization
@@ -143,6 +188,9 @@ void kernel_main(void *dtb, uint64_t el)
     /* Phase 6: Initialize Timer */
     timer_init();                                       /* ARM Generic Timer */
 
+    /* Phase 7: Initialize Scheduler */
+    sched_init();                                       /* Scheduler and idle task */
+
     /* Enable IRQs at CPU level */
     uart_puts("Enabling IRQs at CPU level...\n");
     __asm__ volatile("msr daifclr, #2");                /* Clear IRQ mask (bit 1) */
@@ -169,36 +217,25 @@ void kernel_main(void *dtb, uint64_t el)
     uart_puts("========================================\n");
     uart_puts("\n");
 
-    /* Display IRQ statistics to show timer interrupts working */
-    uart_puts("Waiting 2 seconds to collect timer interrupts...\n");
-    timer_delay_ms(2000);
-    irq_dump_stats();
-
-    /* Main kernel loop */
-    uart_puts("Entering kernel main loop...\n");
-    uart_puts("(Timer interrupts running in background at 100 Hz)\n");
-    uart_puts("(Press any key to see echo, Ctrl-A X to exit QEMU)\n");
+    /* Phase 7: Create test tasks to demonstrate multitasking */
+    uart_puts("Creating test tasks...\n");
+    task_create("Task-A", task_a_func, NULL, 10);
+    task_create("Task-B", task_b_func, NULL, 10);
+    task_create("Task-C", task_c_func, NULL, 10);
     uart_puts("\n");
 
-    /* Simple echo loop */
-    while (1) {
-        char c = uart_getc();
-        uart_puts("Received: '");
-        uart_putc(c);
-        uart_puts("' (0x");
+    /* Display task list */
+    sched_dump_tasks();
 
-        /* Print hex value of character */
-        const char hex[] = "0123456789ABCDEF";
-        uart_putc(hex[(c >> 4) & 0xF]);
-        uart_putc(hex[c & 0xF]);
-        uart_puts(") | Uptime: ");
-        uart_puthex(timer_get_uptime_ms());
-        uart_puts(" ms\n");
-    }
+    uart_puts("\n");
+    uart_puts("========================================\n");
+    uart_puts("Starting Preemptive Multitasking!\n");
+    uart_puts("========================================\n");
+    uart_puts("\n");
 
-    /* Should never reach here */
+    /* Kernel now enters idle loop - scheduler will run tasks */
     while (1) {
-        __asm__ volatile("wfe");
+        __asm__ volatile("wfi");  /* Wait for interrupt */
     }
 }
 

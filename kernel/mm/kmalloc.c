@@ -29,7 +29,17 @@ struct obj_header {
     struct obj_header *next;                            /* Free list link */
 };
 
+/*
+ * Page header for large allocations (>2KB)
+ */
+struct page_header {
+    size_t size;                                        /* Allocation size */
+    uint32_t magic;                                     /* Magic number (different from obj_header) */
+    uint32_t order;                                     /* Page allocation order */
+};
+
 #define KMALLOC_MAGIC   0xDEADBEEF
+#define KMALLOC_PAGE_MAGIC 0xCAFEBABE
 
 /*
  * Find appropriate slab for size
@@ -168,6 +178,10 @@ void *kmalloc(size_t size)
 {
     int slab_idx;
     void *ptr;
+    struct page_header *hdr;
+    struct page *pages;
+    uint32_t order;
+    size_t total_size;
 
     if (size == 0) {
         return NULL;
@@ -176,9 +190,31 @@ void *kmalloc(size_t size)
     /* Find appropriate slab */
     slab_idx = find_slab(size);
     if (slab_idx < 0) {
-        /* Too large for slabs - would need page allocator */
-        uart_puts("WARNING: kmalloc() size too large for slabs\n");
-        return NULL;
+        /* Too large for slabs - use page allocator */
+        total_size = size + sizeof(struct page_header);
+
+        /* Calculate order needed (size in pages) */
+        order = 0;
+        while ((PAGE_SIZE << order) < total_size) {
+            order++;
+        }
+
+        /* Allocate pages */
+        pages = alloc_pages(order);
+        if (!pages) {
+            return NULL;
+        }
+
+        /* Setup header (identity mapped: virt == phys) */
+        hdr = (struct page_header *)page_to_phys(pages);
+        hdr->size = size;
+        hdr->magic = KMALLOC_PAGE_MAGIC;
+        hdr->order = order;
+
+        total_allocated += (PAGE_SIZE << order);
+
+        /* Return pointer after header */
+        return (void *)((uint64_t)hdr + sizeof(struct page_header));
     }
 
     /* Allocate from slab */
@@ -216,12 +252,26 @@ void *kcalloc(size_t nmemb, size_t size)
  */
 void kfree(void *ptr)
 {
+    struct obj_header *obj;
+    struct page_header *page_hdr;
+    struct page *pages;
+
     if (!ptr) {
         return;
     }
 
-    /* Get size from header for statistics */
-    struct obj_header *obj = (struct obj_header *)((uint64_t)ptr - sizeof(struct obj_header));
+    /* Check if this is a page-based allocation */
+    page_hdr = (struct page_header *)((uint64_t)ptr - sizeof(struct page_header));
+    if (page_hdr->magic == KMALLOC_PAGE_MAGIC) {
+        /* Free pages (identity mapped: virt == phys) */
+        total_freed += (PAGE_SIZE << page_hdr->order);
+        pages = phys_to_page((uint64_t)page_hdr);
+        free_pages(pages, page_hdr->order);
+        return;
+    }
+
+    /* Get size from header for statistics (slab allocation) */
+    obj = (struct obj_header *)((uint64_t)ptr - sizeof(struct obj_header));
     if (obj->magic == KMALLOC_MAGIC) {
         total_freed += obj->size;
     }

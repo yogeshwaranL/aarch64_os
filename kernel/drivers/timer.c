@@ -9,6 +9,7 @@
 #include "irq.h"
 #include "gic.h"
 #include "uart.h"
+#include "sched.h"
 
 /* Global tick counter */
 static volatile uint64_t system_ticks = 0;
@@ -23,6 +24,9 @@ static void timer_irq_handler(uint32_t irq, void *data)
 
     /* Increment tick counter */
     system_ticks++;
+
+    /* Call scheduler for preemptive multitasking */
+    schedule();
 
     /* Set next timer interrupt */
     __asm__ volatile("msr cntp_tval_el0, %0" :: "r"((uint64_t)TIMER_INTERVAL));

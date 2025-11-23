@@ -45,18 +45,19 @@ endif
 # Linker flags
 LDFLAGS := -nostdlib -T $(ARCH_DIR)/linker.ld -Map=$(KERNEL_MAP)
 
-# Source files (Phase 4-6)
+# Source files (Phase 4-7)
 ARCH_SOURCES := $(ARCH_DIR)/entry.S
-CORE_SOURCES := $(CORE_DIR)/main.c $(CORE_DIR)/string.c $(CORE_DIR)/irq.c $(CORE_DIR)/exception.c
+CORE_SOURCES := $(CORE_DIR)/main.c $(CORE_DIR)/string.c $(CORE_DIR)/irq.c $(CORE_DIR)/exception.c $(CORE_DIR)/syscall.c
 MM_SOURCES := $(MM_DIR)/mmu.c $(MM_DIR)/pmm.c $(MM_DIR)/kmalloc.c
-SCHED_SOURCES :=
+SCHED_SOURCES := $(SCHED_DIR)/sched.c $(SCHED_DIR)/switch.S
 DRIVER_SOURCES := $(DRIVERS_DIR)/uart.c $(DRIVERS_DIR)/gic.c $(DRIVERS_DIR)/timer.c
 
 # Object files
 ARCH_OBJS := $(patsubst $(ARCH_DIR)/%.S,$(BUILD_DIR)/arch/%.o,$(ARCH_SOURCES))
 CORE_OBJS := $(patsubst $(CORE_DIR)/%.c,$(BUILD_DIR)/core/%.o,$(CORE_SOURCES))
 MM_OBJS := $(patsubst $(MM_DIR)/%.c,$(BUILD_DIR)/mm/%.o,$(MM_SOURCES))
-SCHED_OBJS := $(patsubst $(SCHED_DIR)/%.c,$(BUILD_DIR)/sched/%.o,$(SCHED_SOURCES))
+SCHED_OBJS := $(patsubst $(SCHED_DIR)/%.c,$(BUILD_DIR)/sched/%.o,$(filter %.c,$(SCHED_SOURCES))) \
+              $(patsubst $(SCHED_DIR)/%.S,$(BUILD_DIR)/sched/%.o,$(filter %.S,$(SCHED_SOURCES)))
 DRIVER_OBJS := $(patsubst $(DRIVERS_DIR)/%.c,$(BUILD_DIR)/drivers/%.o,$(DRIVER_SOURCES))
 
 ALL_OBJS := $(ARCH_OBJS) $(CORE_OBJS) $(MM_OBJS) $(SCHED_OBJS) $(DRIVER_OBJS)
@@ -112,6 +113,11 @@ $(BUILD_DIR)/sched/%.o: $(SCHED_DIR)/%.c
 
 # Compile assembly sources
 $(BUILD_DIR)/arch/%.o: $(ARCH_DIR)/%.S
+	@mkdir -p $(dir $@)
+	@echo "AS $<"
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/sched/%.o: $(SCHED_DIR)/%.S
 	@mkdir -p $(dir $@)
 	@echo "AS $<"
 	@$(CC) $(CFLAGS) -c $< -o $@
