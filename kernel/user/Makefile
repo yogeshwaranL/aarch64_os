@@ -52,8 +52,8 @@ $(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf
 # Create object file for embedding in kernel
 $(BUILD_DIR)/%.o: $(BUILD_DIR)/%.bin
 	@echo "Creating embeddable object for $<"
-	@cd $(BUILD_DIR) && \
-	$(LD) -r -b binary -o $(notdir $@) $(notdir $<)
+	@mkdir -p $(dir $@)
+	@cd $(BUILD_DIR) && $(LD) -r -b binary -o $(notdir $@) $(notdir $<)
 
 clean:
 	rm -f $(BUILD_DIR)/*.o $(BUILD_DIR)/*.elf $(BUILD_DIR)/*.bin

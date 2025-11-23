@@ -9,6 +9,7 @@
 #include "task.h"
 #include "kmalloc.h"
 #include "pmm.h"
+#include "mmu.h"
 #include "uart.h"
 #include "timer.h"
 
@@ -259,6 +260,14 @@ void schedule(void)
         next_task->time_slice = DEFAULT_TIME_SLICE;
         next_task->run_count++;
 
+        /* Switch user page table if needed */
+        if (next_task->level == TASK_USER && next_task->page_table) {
+            mmu_switch_user_table((page_table_t *)next_task->page_table);
+        } else if (next_task->level == TASK_KERNEL) {
+            /* Switch back to no user table */
+            mmu_switch_user_table(NULL);
+        }
+
         /* Perform context switch */
         struct task *old_task = current_task;
         current_task = next_task;
@@ -285,6 +294,142 @@ void task_yield(void)
 
     /* Force reschedule */
     current_task->time_slice = 0;
+}
+
+/*
+ * Create a new user mode task
+ */
+task_id_t task_create_user(const char *name, const void *binary, size_t binary_size, uint32_t priority)
+{
+    struct task *task = NULL;
+    int i;
+    uint64_t *stack_ptr;
+    size_t num_pages;
+    struct page *prog_pages;
+    uint64_t prog_phys;
+    const uint64_t USER_PROG_BASE = 0x0000000000400000UL;  /* 4MB in user space */
+    const uint64_t USER_STACK_BASE = 0x0000007FFFF000UL;   /* Near top of user space */
+
+    /* Find free task slot */
+    for (i = 0; i < MAX_TASKS; i++) {
+        if (task_pool[i].state == TASK_TERMINATED) {
+            task = &task_pool[i];
+            break;
+        }
+    }
+
+    if (!task) {
+        uart_puts("ERROR: No free task slots\n");
+        return 0;
+    }
+
+    /* Allocate kernel stack (for exception handling) */
+    struct page *kernel_stack_page = alloc_pages(0);
+    if (!kernel_stack_page) {
+        uart_puts("ERROR: Failed to allocate kernel stack\n");
+        return 0;
+    }
+    task->kernel_stack_base = (void *)page_to_phys(kernel_stack_page);
+
+    /* Allocate user stack */
+    struct page *user_stack_page = alloc_pages(0);
+    if (!user_stack_page) {
+        uart_puts("ERROR: Failed to allocate user stack\n");
+        free_pages(kernel_stack_page, 0);
+        return 0;
+    }
+    task->user_stack_base = (void *)page_to_phys(user_stack_page);
+
+    /* Allocate pages for user program code/data */
+    num_pages = (binary_size + PAGE_SIZE - 1) / PAGE_SIZE;  /* Round up */
+    if (num_pages == 0) num_pages = 1;
+
+    /* For simplicity, allocate order based on num_pages (up to order 3 = 8 pages) */
+    uint32_t order = 0;
+    size_t order_pages = 1;
+    while (order_pages < num_pages && order < 3) {
+        order++;
+        order_pages *= 2;
+    }
+
+    prog_pages = alloc_pages(order);
+    if (!prog_pages) {
+        uart_puts("ERROR: Failed to allocate user program pages\n");
+        free_pages(kernel_stack_page, 0);
+        free_pages(user_stack_page, 0);
+        return 0;
+    }
+    prog_phys = page_to_phys(prog_pages);
+
+    /* Copy user program binary to allocated pages */
+    memcpy((void *)prog_phys, binary, binary_size);
+
+    /* Create user page table */
+    page_table_t *user_pgd = mmu_create_user_table();
+    if (!user_pgd) {
+        uart_puts("ERROR: Failed to create user page table\n");
+        free_pages(kernel_stack_page, 0);
+        free_pages(user_stack_page, 0);
+        free_pages(prog_pages, order);
+        return 0;
+    }
+
+    /* Map user program to user address space (0x400000) */
+    mmu_map_user_range(user_pgd, USER_PROG_BASE, prog_phys,
+                       order_pages * PAGE_SIZE, PAGE_USER_RX);
+
+    /* Map user stack to high address (0x7FFFF000) */
+    mmu_map_user_page(user_pgd, USER_STACK_BASE, (uint64_t)task->user_stack_base, PAGE_USER_RW);
+    task->user_stack_top = (void *)(USER_STACK_BASE + PAGE_SIZE);
+
+    /* Initialize task */
+    task->id = next_task_id++;
+    for (i = 0; i < 31 && name[i]; i++) {
+        task->name[i] = name[i];
+    }
+    task->name[i] = '\0';
+
+    task->priority = priority;
+    task->time_slice = DEFAULT_TIME_SLICE;
+    task->run_count = 0;
+    task->total_runtime = 0;
+    task->level = TASK_USER;                           /* User task */
+    task->page_table = user_pgd;                       /* User page table */
+
+    /* Initialize context */
+    memset(&task->context, 0, sizeof(struct exception_frame));
+
+    /* Set up kernel stack (for exception entry) */
+    stack_ptr = (uint64_t *)((uint8_t *)task->kernel_stack_base + TASK_STACK_SIZE);
+    stack_ptr = (uint64_t *)((uint64_t)stack_ptr & ~0xFUL);  /* 16-byte align */
+    task->kernel_stack_top = (void *)stack_ptr;
+
+    /* Set initial register values for EL0 entry */
+    task->context.elr = USER_PROG_BASE;                /* Entry point (0x400000) */
+    task->context.sp = (uint64_t)task->user_stack_top; /* User stack pointer */
+    task->context.spsr = 0x3C0;                        /* EL0t, IRQs enabled */
+
+    /* Clear all general purpose registers */
+    task->context.x0 = 0;
+    task->context.x1 = 0;
+    /* x2-x30 already zeroed by memset */
+
+    /* Set state and add to ready queue */
+    task->state = TASK_READY;
+
+    if (sched_enabled) {
+        add_to_ready_queue(task);
+    }
+
+    uart_puts("Created user task: ");
+    uart_puts(task->name);
+    uart_puts(" (ID ");
+    uart_puthex(task->id);
+    uart_puts(", size ");
+    uart_puthex(binary_size);
+    uart_puts(" bytes)\n");
+
+    return task->id;
 }
 
 /*

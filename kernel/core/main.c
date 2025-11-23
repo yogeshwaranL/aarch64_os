@@ -15,6 +15,7 @@
 #include "task.h"
 #include "syscall.h"
 #include "hypervisor.h"
+#include "user_programs.h"
 
 /* Current exception level (set by entry.S) */
 static uint64_t current_el = 0;
@@ -306,6 +307,23 @@ void kernel_main(void *dtb, uint64_t el)
     task_create("Task-A", task_a_func, NULL, 10);
     task_create("Task-B", task_b_func, NULL, 10);
     task_create("Task-C", task_c_func, NULL, 10);
+    uart_puts("\n");
+
+    /* Phase 9: Create user mode tasks to demonstrate EL0 execution */
+    uart_puts("========================================\n");
+    uart_puts("Creating User Mode Tasks\n");
+    uart_puts("========================================\n");
+
+    /* Calculate binary sizes */
+    size_t hello_size = (size_t)(_binary_user_hello_bin_end - _binary_user_hello_bin_start);
+    size_t counter_size = (size_t)(_binary_user_counter_bin_end - _binary_user_counter_bin_start);
+
+    /* Create user tasks */
+    task_create_user("user-hello", _binary_user_hello_bin_start, hello_size, 10);
+    task_create_user("user-counter", _binary_user_counter_bin_start, counter_size, 10);
+
+    uart_puts("User tasks created!\n");
+    uart_puts("========================================\n");
     uart_puts("\n");
 
     /* Display task list */

@@ -20,6 +20,7 @@ MM_DIR := mm
 SCHED_DIR := sched
 DRIVERS_DIR := drivers
 INCLUDE_DIR := include
+USER_DIR := user
 
 # Output files
 KERNEL_ELF := $(BUILD_DIR)/kernel.elf
@@ -60,14 +61,22 @@ SCHED_OBJS := $(patsubst $(SCHED_DIR)/%.c,$(BUILD_DIR)/sched/%.o,$(filter %.c,$(
               $(patsubst $(SCHED_DIR)/%.S,$(BUILD_DIR)/sched/%.o,$(filter %.S,$(SCHED_SOURCES)))
 DRIVER_OBJS := $(patsubst $(DRIVERS_DIR)/%.c,$(BUILD_DIR)/drivers/%.o,$(DRIVER_SOURCES))
 
-ALL_OBJS := $(ARCH_OBJS) $(CORE_OBJS) $(MM_OBJS) $(SCHED_OBJS) $(DRIVER_OBJS)
+# User program objects (embedded binaries)
+USER_OBJS := $(BUILD_DIR)/user/user_hello.o $(BUILD_DIR)/user/user_counter.o
+
+ALL_OBJS := $(ARCH_OBJS) $(CORE_OBJS) $(MM_OBJS) $(SCHED_OBJS) $(DRIVER_OBJS) $(USER_OBJS)
 
 # Phony targets
-.PHONY: all clean
+.PHONY: all clean user_programs
 
 # Default target
-all: $(BUILD_DIR) $(KERNEL_ELF) $(KERNEL_BIN)
+all: $(BUILD_DIR) user_programs $(KERNEL_ELF) $(KERNEL_BIN)
 	@echo "Kernel build complete: $(KERNEL_ELF)"
+
+# Build user programs
+user_programs:
+	@echo "Building user programs..."
+	@$(MAKE) -C $(USER_DIR) BUILD_DIR=../../$(BUILD_DIR)/user
 
 # Create build directory
 $(BUILD_DIR):
@@ -124,6 +133,7 @@ $(BUILD_DIR)/sched/%.o: $(SCHED_DIR)/%.S
 
 # Clean
 clean:
+	@$(MAKE) -C $(USER_DIR) clean BUILD_DIR=../../$(BUILD_DIR)/user
 	rm -rf $(BUILD_DIR)
 
 # Info
