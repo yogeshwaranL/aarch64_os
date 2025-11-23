@@ -228,9 +228,75 @@ exception_vectors_el1:
     b       serror_exception_el1
 
 /*
- * Exception handlers (basic implementation for Phase 4)
- * These will be enhanced in later phases
+ * Exception handlers (Phase 6: Full context save/restore)
  */
+
+/*
+ * Macro to save exception context
+ * Saves all registers to match struct exception_frame
+ */
+.macro save_context
+    /* Allocate space for exception_frame (272 bytes) */
+    sub     sp, sp, #272
+
+    /* Save x0-x30 */
+    stp     x0, x1, [sp, #0]
+    stp     x2, x3, [sp, #16]
+    stp     x4, x5, [sp, #32]
+    stp     x6, x7, [sp, #48]
+    stp     x8, x9, [sp, #64]
+    stp     x10, x11, [sp, #80]
+    stp     x12, x13, [sp, #96]
+    stp     x14, x15, [sp, #112]
+    stp     x16, x17, [sp, #128]
+    stp     x18, x19, [sp, #144]
+    stp     x20, x21, [sp, #160]
+    stp     x22, x23, [sp, #176]
+    stp     x24, x25, [sp, #192]
+    stp     x26, x27, [sp, #208]
+    stp     x28, x29, [sp, #224]
+    str     x30, [sp, #240]
+
+    /* Save SP (before exception) */
+    add     x0, sp, #272            /* Original SP */
+    str     x0, [sp, #248]
+
+    /* Save ELR and SPSR */
+    mrs     x0, elr_el1
+    mrs     x1, spsr_el1
+    stp     x0, x1, [sp, #256]
+.endm
+
+/*
+ * Macro to restore exception context
+ */
+.macro restore_context
+    /* Restore ELR and SPSR */
+    ldp     x0, x1, [sp, #256]
+    msr     elr_el1, x0
+    msr     spsr_el1, x1
+
+    /* Restore x0-x30 */
+    ldp     x0, x1, [sp, #0]
+    ldp     x2, x3, [sp, #16]
+    ldp     x4, x5, [sp, #32]
+    ldp     x6, x7, [sp, #48]
+    ldp     x8, x9, [sp, #64]
+    ldp     x10, x11, [sp, #80]
+    ldp     x12, x13, [sp, #96]
+    ldp     x14, x15, [sp, #112]
+    ldp     x16, x17, [sp, #128]
+    ldp     x18, x19, [sp, #144]
+    ldp     x20, x21, [sp, #160]
+    ldp     x22, x23, [sp, #176]
+    ldp     x24, x25, [sp, #192]
+    ldp     x26, x27, [sp, #208]
+    ldp     x28, x29, [sp, #224]
+    ldr     x30, [sp, #240]
+
+    /* Deallocate exception_frame */
+    add     sp, sp, #272
+.endm
 
 .global sync_exception_el2
 .global irq_exception_el2
@@ -238,42 +304,35 @@ exception_vectors_el1:
 .global serror_exception_el2
 
 sync_exception_el2:
-    /* Save exception context */
-    stp     x29, x30, [sp, #-16]!
-    stp     x27, x28, [sp, #-16]!
-
-    /* Call C handler */
-    mov     x0, #2                  /* EL2 */
-    mov     x1, #0                  /* Sync exception */
-    bl      handle_exception
-
-    /* Restore context */
-    ldp     x27, x28, [sp], #16
-    ldp     x29, x30, [sp], #16
+    save_context
+    mov     x0, sp                  /* exception_frame pointer */
+    mrs     x1, esr_el2             /* ESR */
+    mrs     x2, far_el2             /* FAR */
+    bl      handle_sync_exception
+    restore_context
     eret
 
 irq_exception_el2:
-    stp     x29, x30, [sp, #-16]!
-    mov     x0, #2
-    mov     x1, #1                  /* IRQ */
-    bl      handle_exception
-    ldp     x29, x30, [sp], #16
+    save_context
+    mov     x0, sp                  /* exception_frame pointer */
+    bl      handle_irq_exception
+    restore_context
     eret
 
 fiq_exception_el2:
-    stp     x29, x30, [sp, #-16]!
-    mov     x0, #2
-    mov     x1, #2                  /* FIQ */
-    bl      handle_exception
-    ldp     x29, x30, [sp], #16
+    save_context
+    mov     x0, sp                  /* exception_frame pointer */
+    bl      handle_fiq_exception
+    restore_context
     eret
 
 serror_exception_el2:
-    stp     x29, x30, [sp, #-16]!
-    mov     x0, #2
-    mov     x1, #3                  /* SError */
-    bl      handle_exception
-    ldp     x29, x30, [sp], #16
+    save_context
+    mov     x0, sp                  /* exception_frame pointer */
+    mrs     x1, esr_el2
+    mrs     x2, far_el2
+    bl      handle_serror_exception
+    restore_context
     eret
 
 .global sync_exception_el1
@@ -282,35 +341,33 @@ serror_exception_el2:
 .global serror_exception_el1
 
 sync_exception_el1:
-    stp     x29, x30, [sp, #-16]!
-    stp     x27, x28, [sp, #-16]!
-    mov     x0, #1                  /* EL1 */
-    mov     x1, #0                  /* Sync exception */
-    bl      handle_exception
-    ldp     x27, x28, [sp], #16
-    ldp     x29, x30, [sp], #16
+    save_context
+    mov     x0, sp                  /* exception_frame pointer */
+    mrs     x1, esr_el1             /* ESR */
+    mrs     x2, far_el1             /* FAR */
+    bl      handle_sync_exception
+    restore_context
     eret
 
 irq_exception_el1:
-    stp     x29, x30, [sp, #-16]!
-    mov     x0, #1
-    mov     x1, #1                  /* IRQ */
-    bl      handle_exception
-    ldp     x29, x30, [sp], #16
+    save_context
+    mov     x0, sp                  /* exception_frame pointer */
+    bl      handle_irq_exception
+    restore_context
     eret
 
 fiq_exception_el1:
-    stp     x29, x30, [sp, #-16]!
-    mov     x0, #1
-    mov     x1, #2                  /* FIQ */
-    bl      handle_exception
-    ldp     x29, x30, [sp], #16
+    save_context
+    mov     x0, sp                  /* exception_frame pointer */
+    bl      handle_fiq_exception
+    restore_context
     eret
 
 serror_exception_el1:
-    stp     x29, x30, [sp, #-16]!
-    mov     x0, #1
-    mov     x1, #3                  /* SError */
-    bl      handle_exception
-    ldp     x29, x30, [sp], #16
+    save_context
+    mov     x0, sp                  /* exception_frame pointer */
+    mrs     x1, esr_el1
+    mrs     x2, far_el1
+    bl      handle_serror_exception
+    restore_context
     eret

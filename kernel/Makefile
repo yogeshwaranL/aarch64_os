@@ -45,12 +45,12 @@ endif
 # Linker flags
 LDFLAGS := -nostdlib -T $(ARCH_DIR)/linker.ld -Map=$(KERNEL_MAP)
 
-# Source files (Phase 4-5)
+# Source files (Phase 4-6)
 ARCH_SOURCES := $(ARCH_DIR)/entry.S
-CORE_SOURCES := $(CORE_DIR)/main.c $(CORE_DIR)/string.c
+CORE_SOURCES := $(CORE_DIR)/main.c $(CORE_DIR)/string.c $(CORE_DIR)/irq.c $(CORE_DIR)/exception.c
 MM_SOURCES := $(MM_DIR)/mmu.c $(MM_DIR)/pmm.c $(MM_DIR)/kmalloc.c
 SCHED_SOURCES :=
-DRIVER_SOURCES := $(DRIVERS_DIR)/uart.c $(DRIVERS_DIR)/gic.c
+DRIVER_SOURCES := $(DRIVERS_DIR)/uart.c $(DRIVERS_DIR)/gic.c $(DRIVERS_DIR)/timer.c
 
 # Object files
 ARCH_OBJS := $(patsubst $(ARCH_DIR)/%.S,$(BUILD_DIR)/arch/%.o,$(ARCH_SOURCES))

@@ -8,20 +8,15 @@
 #include "pmm.h"
 #include "kmalloc.h"
 #include "gic.h"
+#include "irq.h"
+#include "timer.h"
+#include "exception.h"
 
 /* Current exception level (set by entry.S) */
 static uint64_t current_el = 0;
 
 /* Device tree blob pointer */
 static void *device_tree = NULL;
-
-/* Exception type names */
-static const char *exception_names[] = {
-    "Synchronous",
-    "IRQ",
-    "FIQ",
-    "SError"
-};
 
 /*
  * Print kernel banner
@@ -142,6 +137,17 @@ void kernel_main(void *dtb, uint64_t el)
     /* Phase 5: Initialize GIC */
     gic_init();                                         /* Interrupt controller */
 
+    /* Phase 6: Initialize IRQ subsystem */
+    irq_init();                                         /* IRQ dispatch */
+
+    /* Phase 6: Initialize Timer */
+    timer_init();                                       /* ARM Generic Timer */
+
+    /* Enable IRQs at CPU level */
+    uart_puts("Enabling IRQs at CPU level...\n");
+    __asm__ volatile("msr daifclr, #2");                /* Clear IRQ mask (bit 1) */
+    uart_puts("IRQs enabled!\n\n");
+
     /* Test memory allocator */
     uart_puts("Testing memory allocator:\n");
     void *ptr1 = kmalloc(64);
@@ -163,8 +169,14 @@ void kernel_main(void *dtb, uint64_t el)
     uart_puts("========================================\n");
     uart_puts("\n");
 
+    /* Display IRQ statistics to show timer interrupts working */
+    uart_puts("Waiting 2 seconds to collect timer interrupts...\n");
+    timer_delay_ms(2000);
+    irq_dump_stats();
+
     /* Main kernel loop */
     uart_puts("Entering kernel main loop...\n");
+    uart_puts("(Timer interrupts running in background at 100 Hz)\n");
     uart_puts("(Press any key to see echo, Ctrl-A X to exit QEMU)\n");
     uart_puts("\n");
 
@@ -179,7 +191,9 @@ void kernel_main(void *dtb, uint64_t el)
         const char hex[] = "0123456789ABCDEF";
         uart_putc(hex[(c >> 4) & 0xF]);
         uart_putc(hex[c & 0xF]);
-        uart_puts(")\n");
+        uart_puts(") | Uptime: ");
+        uart_puthex(timer_get_uptime_ms());
+        uart_puts(" ms\n");
     }
 
     /* Should never reach here */
@@ -188,54 +202,3 @@ void kernel_main(void *dtb, uint64_t el)
     }
 }
 
-/*
- * Exception handler (called from entry.S)
- *
- * el = exception level (1 or 2)
- * type = exception type (0=sync, 1=irq, 2=fiq, 3=serror)
- */
-void handle_exception(uint64_t el, uint64_t type)
-{
-    uint64_t esr, elr, far;
-
-    uart_puts("\n*** EXCEPTION ***\n");
-    uart_puts("Exception Level: EL");
-    uart_putc('0' + el);
-    uart_puts("\n");
-
-    if (type < ARRAY_SIZE(exception_names)) {
-        uart_puts("Type: ");
-        uart_puts(exception_names[type]);
-        uart_puts("\n");
-    }
-
-    /* Read exception syndrome register */
-    if (el == 2) {
-        __asm__ volatile("mrs %0, esr_el2" : "=r"(esr));
-        __asm__ volatile("mrs %0, elr_el2" : "=r"(elr));
-        __asm__ volatile("mrs %0, far_el2" : "=r"(far));
-    } else {
-        __asm__ volatile("mrs %0, esr_el1" : "=r"(esr));
-        __asm__ volatile("mrs %0, elr_el1" : "=r"(elr));
-        __asm__ volatile("mrs %0, far_el1" : "=r"(far));
-    }
-
-    uart_puts("ESR: ");
-    uart_puthex(esr);
-    uart_puts("\n");
-
-    uart_puts("ELR: ");
-    uart_puthex(elr);
-    uart_puts("\n");
-
-    uart_puts("FAR: ");
-    uart_puthex(far);
-    uart_puts("\n");
-
-    uart_puts("\nHalting system...\n");
-
-    /* Halt */
-    while (1) {
-        __asm__ volatile("wfe");
-    }
-}
