@@ -47,7 +47,7 @@ LDFLAGS := -nostdlib -T $(ARCH_DIR)/linker.ld -Map=$(KERNEL_MAP)
 
 # Source files (Phase 4-7)
 ARCH_SOURCES := $(ARCH_DIR)/entry.S
-CORE_SOURCES := $(CORE_DIR)/main.c $(CORE_DIR)/string.c $(CORE_DIR)/irq.c $(CORE_DIR)/exception.c $(CORE_DIR)/syscall.c
+CORE_SOURCES := $(CORE_DIR)/main.c $(CORE_DIR)/string.c $(CORE_DIR)/irq.c $(CORE_DIR)/exception.c $(CORE_DIR)/syscall.c $(CORE_DIR)/hypervisor.c
 MM_SOURCES := $(MM_DIR)/mmu.c $(MM_DIR)/pmm.c $(MM_DIR)/kmalloc.c
 SCHED_SOURCES := $(SCHED_DIR)/sched.c $(SCHED_DIR)/switch.S
 DRIVER_SOURCES := $(DRIVERS_DIR)/uart.c $(DRIVERS_DIR)/gic.c $(DRIVERS_DIR)/timer.c

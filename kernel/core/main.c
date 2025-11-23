@@ -14,6 +14,7 @@
 #include "sched.h"
 #include "task.h"
 #include "syscall.h"
+#include "hypervisor.h"
 
 /* Current exception level (set by entry.S) */
 static uint64_t current_el = 0;
@@ -174,6 +175,11 @@ void kernel_main(void *dtb, uint64_t el)
     /* Test basic functions */
     test_basic_functions();
 
+    /* Phase 8: Initialize Hypervisor (if at EL2) */
+    if (current_el == 2) {
+        hypervisor_init();
+    }
+
     /* Phase 5: Initialize Memory Management */
     pmm_init();                                         /* Physical memory manager */
     mmu_init();                                         /* MMU and page tables */
@@ -216,6 +222,84 @@ void kernel_main(void *dtb, uint64_t el)
     uart_puts("Kernel initialization complete!\n");
     uart_puts("========================================\n");
     uart_puts("\n");
+
+    /* Phase 8: Test Hypervisor Calls (if at EL2) */
+    if (current_el == 2) {
+        uart_puts("========================================\n");
+        uart_puts("Testing Hypervisor Calls (HVC)\n");
+        uart_puts("========================================\n\n");
+
+        /* Test HVC: Get hypervisor version */
+        uint64_t version;
+        __asm__ volatile(
+            "mov x0, %1\n"
+            "hvc #0\n"
+            "mov %0, x0\n"
+            : "=r"(version)
+            : "i"(HVC_GET_VERSION)
+            : "x0"
+        );
+        uart_puts("HVC_GET_VERSION:   ");
+        uart_puthex(version);
+        uart_puts(" (v");
+        uart_putc('0' + ((version >> 16) & 0xFF));
+        uart_putc('.');
+        uart_putc('0' + (version & 0xFF));
+        uart_puts(")\n");
+
+        /* Test HVC: Console putc */
+        uart_puts("HVC_CONSOLE_PUTC:  ");
+        __asm__ volatile(
+            "mov x0, %0\n"
+            "mov x1, %1\n"
+            "hvc #0\n"
+            :
+            : "i"(HVC_CONSOLE_PUTC), "i"('H')
+            : "x0", "x1"
+        );
+        __asm__ volatile(
+            "mov x0, %0\n"
+            "mov x1, %1\n"
+            "hvc #0\n"
+            :
+            : "i"(HVC_CONSOLE_PUTC), "i"('V')
+            : "x0", "x1"
+        );
+        __asm__ volatile(
+            "mov x0, %0\n"
+            "mov x1, %1\n"
+            "hvc #0\n"
+            :
+            : "i"(HVC_CONSOLE_PUTC), "i"('C')
+            : "x0", "x1"
+        );
+        __asm__ volatile(
+            "mov x0, %0\n"
+            "mov x1, %1\n"
+            "hvc #0\n"
+            :
+            : "i"(HVC_CONSOLE_PUTC), "i"('!')
+            : "x0", "x1"
+        );
+        uart_puts("\n");
+
+        /* Test HVC: Get VM info */
+        uint64_t vm_info;
+        __asm__ volatile(
+            "mov x0, %1\n"
+            "hvc #0\n"
+            "mov %0, x0\n"
+            : "=r"(vm_info)
+            : "i"(HVC_VM_INFO)
+            : "x0"
+        );
+        uart_puts("HVC_VM_INFO:       EL");
+        uart_putc('0' + vm_info);
+        uart_puts("\n");
+
+        /* Display hypervisor state */
+        hypervisor_dump_state();
+    }
 
     /* Phase 7: Create test tasks to demonstrate multitasking */
     uart_puts("Creating test tasks...\n");
