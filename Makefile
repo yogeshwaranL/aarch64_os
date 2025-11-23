@@ -115,14 +115,14 @@ run: kernel
 	@echo "Starting QEMU..."
 	@echo "======================================"
 	$(QEMU) \
-		-L /usr/lib/ipxe/qemu \
 		-machine $(QEMU_MACHINE) \
 		-cpu $(QEMU_CPU) \
 		-smp $(QEMU_SMP) \
 		-m $(QEMU_MEMORY) \
 		-nographic \
 		-serial mon:stdio \
-		-kernel $(KERNEL_ELF)
+		-kernel $(KERNEL_ELF) \
+		-nic none
 
 # Run in QEMU with GDB debugging
 run-debug: kernel
@@ -131,7 +131,6 @@ run-debug: kernel
 	@echo "Connect with: gdb-multiarch $(KERNEL_ELF) -ex 'target remote :1234'"
 	@echo "======================================"
 	$(QEMU) \
-		-L /usr/lib/ipxe/qemu \
 		-machine $(QEMU_MACHINE) \
 		-cpu $(QEMU_CPU) \
 		-smp $(QEMU_SMP) \
@@ -139,6 +138,7 @@ run-debug: kernel
 		-nographic \
 		-serial mon:stdio \
 		-kernel $(KERNEL_ELF) \
+		-nic none \
 		-s -S
 
 # ==================== DOCUMENTATION ====================

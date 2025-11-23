@@ -129,7 +129,8 @@ else
         -m $MEMORY \
         -nographic \
         -serial mon:stdio \
-        -kernel $KERNEL"
+        -kernel $KERNEL \
+        -nic none"
 fi
 
 if [ $DEBUG_MODE -eq 1 ]; then
